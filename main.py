@@ -86,7 +86,7 @@ LATE_SURR = list(
 
 class Shoe:
     def __init__(self, decks: int = 6):
-        self.cut = int(decks * 52 * 0.75)
+        self.cut = int(decks * 52 * random.random() * 0.1 + 0.7)
 
         self._deck = list(range(2, 12)) * 4 * decks
         random.shuffle(self._deck)
@@ -99,7 +99,7 @@ class Shoe:
 
     @property
     def true_count(self) -> int:
-        return round(self._count / (len(self._deck) / 52.0))
+        return round(self._count / (len(self._deck) / 52))
 
     def pop(self) -> int:
         self._delt += 1
@@ -223,13 +223,25 @@ def run() -> float:
         for hand, last_action in hands:
             hand_count += 1
             hand_value = evaluate(hand)
-            hand_bet = 2 * bet if last_action == "D" else bet
 
+            # Surrender
             if last_action == "SUR":
                 chips -= 0.5 * bet
-            if hand_value > 21:
+            # Black jack
+            elif (
+                len(hand) == 2
+                and hand_value == 21
+                and len(dealer_hand) != 2
+                or dealer_value != 21
+            ):
+                chips += 1.5 * bet
+            # Bust
+            elif hand_value > 21:
+                hand_bet = 2 * bet if last_action == "D" else bet
                 chips -= hand_bet
+            # Beating dealer
             elif dealer_value > 21 or hand_value > dealer_value:
+                hand_bet = 2 * bet if last_action == "D" else bet
                 chips += hand_bet
 
     return chips
