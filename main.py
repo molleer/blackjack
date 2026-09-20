@@ -86,7 +86,7 @@ LATE_SURR = list(
 
 class Shoe:
     def __init__(self, decks: int = 6):
-        self.cut = int(decks * 52 * random.random() * 0.1 + 0.7)
+        self.cut = int(decks * 52 * ((random.random() - 0.5) * 0.1 + 0.7))
 
         self._deck = list(range(2, 12)) * 4 * decks
         random.shuffle(self._deck)
@@ -99,7 +99,7 @@ class Shoe:
 
     @property
     def true_count(self) -> int:
-        return round(self._count / (len(self._deck) / 52))
+        return round(self._count / (len(self._deck) / 52.0))
 
     def pop(self) -> int:
         self._delt += 1
@@ -214,7 +214,7 @@ def run() -> float:
     hand_count = 0
 
     while not shoe.should_stop():
-        bet = max(1.0, max(shoe.true_count, 0) * 10.0)
+        bet = max(1.0, shoe.true_count * 10.0)
         dealer_hand: tuple[int, ...] = (shoe.pop(), shoe.pop())
         hands = play_hand((shoe.pop(),), dealer_hand[0], shoe)
         dealer_hand = play_dealer(dealer_hand, shoe)
