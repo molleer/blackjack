@@ -1,8 +1,8 @@
 import random
 import time
 
-from typing import Literal
-
+from typing import Literal, Sequence
+import matplotlib.pyplot as plt
 
 random.seed(int(time.time()))
 """
@@ -54,7 +54,7 @@ SPLITS = list(
     )
 )
 
-SOFT_TOTALS = list(
+SOFT_TOTALS: list[list[Action]] = list(
     reversed(
         [
             # Dealer Upcard
@@ -88,7 +88,7 @@ class Shoe:
     def __init__(self, decks: int = 6):
         self.cut = int(decks * 52 * ((random.random() - 0.5) * 0.1 + 0.7))
 
-        self._deck = list(range(2, 12)) * 4 * decks
+        self._deck = (list(range(2, 12)) + [10] * 3) * 4 * decks
         random.shuffle(self._deck)
         self._delt = 0
 
@@ -208,46 +208,89 @@ def play_dealer(hand: tuple[int, ...], shoe: Shoe) -> tuple[int, ...]:
     return play_dealer((*hand, shoe.pop()), shoe)
 
 
-def run() -> float:
+def visualize(
+    dealer: tuple[int, ...],
+    hands: tuple[tuple[tuple[int, ...], Action], ...],
+    bet: float,
+    chips: float,
+    shoe: Shoe,
+) -> None:
+    print("Shoe")
+    print(f"  RC: {shoe._count}")
+    print(f"  TC: {shoe.true_count}")
+    print(f"Bet: {bet}, Chips: {chips}")
+    print(f"Dealer: {dealer} ({evaluate(dealer)})")
+    print("Hands:")
+    for hand, last_action in hands:
+        print(
+            f"  {hand} [{last_action}] ({evaluate(hand)}) {{{bet_outcom(dealer, (hand, last_action)) * bet}}}"
+        )
+    print("************************************")
+
+
+def bet_outcom(dealer: tuple[int, ...], hand: tuple[tuple[int, ...], Action]) -> float:
+    cards, last_action = hand
+    hand_value = evaluate(cards)
+    dealer_value = evaluate(dealer)
+    dub_mult = 2.0 if last_action == "D" else 1.0
+
+    if hand_value > 21:
+        return -1.0 * dub_mult
+    if last_action == "SUR":
+        assert len(cards) == 2, "Cannot surrender after hitting"
+        return -0.5
+    if (
+        len(cards) == 2
+        and hand_value == 21
+        and not (len(dealer) == 2 and dealer_value == 21)
+    ):
+        return 1.5
+    if dealer_value > 21 or hand_value > dealer_value:
+        return 1 * dub_mult
+    if dealer_value == hand_value:
+        return 0
+
+    return -1 * dub_mult
+
+
+def run() -> list[float]:
     shoe = Shoe(6)
     chips = 0.0
+    wins = [0.0, 0.0]
     hand_count = 0
+    history = [chips]
 
     while not shoe.should_stop():
         bet = max(1.0, shoe.true_count * 10.0)
         dealer_hand: tuple[int, ...] = (shoe.pop(), shoe.pop())
         hands = play_hand((shoe.pop(),), dealer_hand[0], shoe)
         dealer_hand = play_dealer(dealer_hand, shoe)
-        dealer_value = evaluate(dealer_hand)
 
         for hand, last_action in hands:
             hand_count += 1
-            hand_value = evaluate(hand)
+            change = bet * bet_outcom(dealer_hand, (hand, last_action))
+            chips += change
 
-            # Surrender
-            if last_action == "SUR":
-                chips -= 0.5 * bet
-            # Black jack
-            elif (
-                len(hand) == 2
-                and hand_value == 21
-                and len(dealer_hand) != 2
-                or dealer_value != 21
-            ):
-                chips += 1.5 * bet
-            # Bust
-            elif hand_value > 21:
-                hand_bet = 2 * bet if last_action == "D" else bet
-                chips -= hand_bet
-            # Beating dealer
-            elif dealer_value > 21 or hand_value > dealer_value:
-                hand_bet = 2 * bet if last_action == "D" else bet
-                chips += hand_bet
+            if change > 0:
+                wins[0] = wins[0] + change
+            else:
+                wins[1] = wins[1] - change
 
-    return chips
+        history.append(chips)
+        # visualize(dealer_hand, hands, bet, chips, shoe)
+
+    return history
+
+
+def avg(xs: Sequence[float]) -> float:
+    return sum(xs) / len(xs)
 
 
 if __name__ == "__main__":
-    shoes = 10000
-    chips = sum(run() for _ in range(shoes))
-    print(f"EV/shoe: {chips / shoes}")
+    history = [run() for _ in range(10000)]
+    avg_history = [
+        avg([h[i] for h in history if i < len(h)])
+        for i in range(max([len(h) for h in history]))
+    ]
+    plt.plot(range(len(avg_history[:-3])), avg_history[:-3])
+    plt.show()
